@@ -1,4 +1,8 @@
-# ABNF (BSD License) grammar
+# ABNF (BSD License) grammar ---- RUST PORT
+
+## NB!!
+To build, clone, and build in a Bash environment (e.g., MSYS2) by typing "make".
+To run, type "bash run.sh examples/*"
 
 ## Authors
 
