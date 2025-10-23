@@ -15,6 +15,7 @@ use abnf::AbnfLexer;
 use abnf::AbnfParser;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::cell::Cell;
 use antlr4rust::token_factory::TokenFactory;
 use antlr4rust::errors::ANTLRError;
 use std::error::Error;
@@ -96,32 +97,39 @@ fn parse_input(
     let istream = InputStream::new(input.as_bytes());
     let mut lexer = AbnfLexer::new(istream);
     lexer.remove_error_listeners();
-    lexer.add_error_listener(Box::new(ParserErrorListener {
+    let lec = Rc::new(RefCell::new(0));
+    let mut lel = Box::new(ParserErrorListener {
+        error_count: Rc::clone(&lec),
 	parse_errors: parse_errors.clone(),
-	}));
+	});
+    lexer.add_error_listener(lel);
     let token_stream = CommonTokenStream::new(lexer);
     let mut parser = AbnfParser::new(token_stream);
     parser.remove_error_listeners();
-    parser.add_error_listener(Box::new(ParserErrorListener {
+    let pec = Rc::new(RefCell::new(0));
+    let pel = Box::new(ParserErrorListener {
+        error_count: Rc::clone(&pec),
 	parse_errors: parse_errors.clone(),
-	}));
+	});
+    parser.add_error_listener(pel);
+
+
+// To do:
+//    let mut lexer_listener = CustomErrorListener::new(flags.quiet, flags.tee, tee_writer);
+//    let mut parser_listener = CustomErrorListener::new(flags.quiet, flags.tee, tee_writer);
+//    lexer.add_error_listener(&mut lexer_listener);
+//    parser.add_error_listener(&mut parser_listener);
 
     let mut tee_file = flags.tee.then(|| File::create(format!("{}.errors", input_name)).unwrap());
     let tee_writer: &mut dyn Write = tee_file.as_mut().map(|f| f as _).unwrap_or(&mut io::sink());
-
-//    let mut lexer_listener = CustomErrorListener::new(flags.quiet, flags.tee, tee_writer);
-//    let mut parser_listener = CustomErrorListener::new(flags.quiet, flags.tee, tee_writer);
-
-//    lexer.remove_error_listeners();
-//    lexer.add_error_listener(&mut lexer_listener);
-//    parser.remove_error_listeners();
-//    parser.add_error_listener(&mut parser_listener);
 
     let start = Instant::now();
     let tree = parser.rule_().expect("parsing failed setup");
     let elapsed = start.elapsed();
 
-//    let mut error_cnt = lexer_listener.errors + parser_listener.errors;
+    let error_cnt = *lec.borrow() + *pec.borrow();
+
+    eprintln!("{}", error_cnt);
 
 /*
     if flags.show_tree {
@@ -133,8 +141,6 @@ fn parse_input(
 //            eprintln!("{}", tree_str);
         }
     }
-*/
-/*
     if !flags.quiet {
         eprint!("{}Go {} {} {} {:.3}\n",
             flags.prefix, idx, input_name,
@@ -144,9 +150,7 @@ fn parse_input(
     }
 */
 
-//    if error_cnt > 0 { 1 } else { 0 }
-
-    0
+    if error_cnt > 0 { 1 } else { 0 }
 }
 
 struct Flags {
@@ -155,7 +159,7 @@ struct Flags {
     prefix: String,
     show_tokens: bool,
     show_tree: bool,
-    show_trace: bool, // not used (ANTRL Rust lacks SetTrace API)
+    show_trace: bool,
     tee: bool,
     quiet: bool,
 }
@@ -225,6 +229,7 @@ fn main() {
 
 struct ParserErrorListener {
     parse_errors: Rc<RefCell<Vec<ParseError>>>,
+    error_count: Rc<RefCell<i32>>,
 }
 
 impl<'a, T: Recognizer<'a>> ErrorListener<'a, T> for ParserErrorListener {
@@ -237,6 +242,8 @@ impl<'a, T: Recognizer<'a>> ErrorListener<'a, T> for ParserErrorListener {
         msg: &str,
         _error: Option<&ANTLRError>,
     ) {
+	*self.error_count.borrow_mut() += 1;
+	eprintln!("Syn err {}", msg);
         self.parse_errors.borrow_mut().push(ParseError {
             source: None,
             pos: (line, column + 1),
