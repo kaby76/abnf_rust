@@ -1,4 +1,4 @@
 # Generated from trgen 0.23.27
-dotnet clean Test.csproj
-rm -rf bin obj
-rm -f AbnfLexer.cs AbnfParser.cs 
+rm -rf Cargo.log
+rm -rf target
+rm -rf src/abnf/abnf* src/abnf/Abnf*
