@@ -78,34 +78,13 @@ impl<'a, W: Write> ErrorListener<'a> for CustomErrorListener<W> {
 
 fn parse_input(
     input_name: &str,
-//    input: Box<dyn Read>,
     is_filename: bool,
-//    idx: usize,
     flags: &Flags,
 ) -> usize {
-/*
-    let mut input_data = String::new();
-    if is_filename {
-        BufReader::new(input).read_to_string(&mut input_data).unwrap();
-    } else {
-        input.read_to_string(&mut input_data).unwrap();
-    }
-*/
-    let input_name = "examples/iri.abnf";
     let my_string_result = fs::read_to_string(input_name);
     let input = my_string_result.unwrap(); // Panics if Err
     let istream = InputStream::new(input.as_bytes());
     let lexer = AbnfLexer::new(istream);
-/*
-    if flags.show_tokens {
-        for (i, t) in lexer.clone().into_iter().enumerate() {
-            eprintln!("{}", t.to_string());
-            if t.get_token_type() == Token::EOF {
-                break;
-            }
-        }
-    }
-*/
     let token_stream = CommonTokenStream::new(lexer);
     let mut parser = AbnfParser::new(token_stream);
 
@@ -216,7 +195,7 @@ fn main() {
         for (idx, input) in flags.inputs.iter().enumerate() {
             let is_fn = flags.is_fns[idx];
 	    let start_all = Instant::now();
-	    parse_input(input, /* reader, */ true, /* idx, */ &flags);
+	    parse_input(input, true, &flags);
 	    let elapsed = start_all.elapsed();
 	    if !flags.quiet {
 		eprintln!("{}Total Time: {:.3}", flags.prefix, elapsed.as_secs_f64());
