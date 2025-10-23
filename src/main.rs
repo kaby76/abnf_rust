@@ -22,7 +22,8 @@ use std::error::Error;
 use std::sync::Arc;
 use std::fmt::Display;
 use antlr4rust::{Parser as AntlrParser};
-
+use antlr4rust::tree::*;
+use antlr4rust::trees::*;
 
 /*
 struct CustomErrorListener<W: Write> {
@@ -130,6 +131,12 @@ fn parse_input(
     let error_cnt = *lec.borrow() + *pec.borrow();
 
     eprintln!("{}", error_cnt);
+
+	let tree_str = tree.to_string_tree(&*parser);
+	eprintln!("{}", tree_str);
+//	let tree_str = tree.to_string_tree(parser);
+//	let tree_str = antlr4rust::trees::string_tree(&tree, parser.get_rule_names());
+//        let tree_str = tree.to_string_tree(&parser);
 
 /*
     if flags.show_tree {
