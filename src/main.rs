@@ -5,7 +5,7 @@ use std::io::{self, Read, BufRead, BufReader, Write};
 use std::process;
 use std::time::Instant;
 use antlr4rust::common_token_stream::CommonTokenStream;
-use antlr4rust::error_listener::{ErrorListener, ConsoleErrorListener};
+use antlr4rust::error_listener::ErrorListener;
 use antlr4rust::input_stream::InputStream;
 use antlr4rust::recognizer::Recognizer;
 use antlr4rust::token::Token;
@@ -13,6 +13,15 @@ use std::fs;
 mod abnf;
 use abnf::AbnfLexer;
 use abnf::AbnfParser;
+use std::rc::Rc;
+use std::cell::RefCell;
+use antlr4rust::token_factory::TokenFactory;
+use antlr4rust::errors::ANTLRError;
+use std::error::Error;
+use std::sync::Arc;
+use std::fmt::Display;
+use antlr4rust::{Parser as AntlrParser};
+
 
 /*
 struct CustomErrorListener<W: Write> {
@@ -81,12 +90,21 @@ fn parse_input(
     is_filename: bool,
     flags: &Flags,
 ) -> usize {
+    let parse_errors = Rc::new(RefCell::new(Vec::<ParseError>::new()));
     let my_string_result = fs::read_to_string(input_name);
     let input = my_string_result.unwrap(); // Panics if Err
     let istream = InputStream::new(input.as_bytes());
-    let lexer = AbnfLexer::new(istream);
+    let mut lexer = AbnfLexer::new(istream);
+    lexer.remove_error_listeners();
+    lexer.add_error_listener(Box::new(ParserErrorListener {
+	parse_errors: parse_errors.clone(),
+	}));
     let token_stream = CommonTokenStream::new(lexer);
     let mut parser = AbnfParser::new(token_stream);
+    parser.remove_error_listeners();
+    parser.add_error_listener(Box::new(ParserErrorListener {
+	parse_errors: parse_errors.clone(),
+	}));
 
     let mut tee_file = flags.tee.then(|| File::create(format!("{}.errors", input_name)).unwrap());
     let tee_writer: &mut dyn Write = tee_file.as_mut().map(|f| f as _).unwrap_or(&mut io::sink());
@@ -204,3 +222,46 @@ fn main() {
         process::exit(error_code  as i32);
     }
 }
+
+struct ParserErrorListener {
+    parse_errors: Rc<RefCell<Vec<ParseError>>>,
+}
+
+impl<'a, T: Recognizer<'a>> ErrorListener<'a, T> for ParserErrorListener {
+    fn syntax_error(
+        &self,
+        _recognizer: &T,
+        _offending_symbol: Option<&<T::TF as TokenFactory<'a>>::Inner>,
+        line: isize,
+        column: isize,
+        msg: &str,
+        _error: Option<&ANTLRError>,
+    ) {
+        self.parse_errors.borrow_mut().push(ParseError {
+            source: None,
+            pos: (line, column + 1),
+            msg: format!("Syntax error: {msg}"),
+        })
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub struct ParseError {
+    pub source: Option<Box<dyn Error + Send + Sync + 'static>>,
+    pub pos: (isize, isize),
+    pub msg: String,
+}
+
+impl Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ERROR: <input>:{}:{}: {}",
+            self.pos.0, self.pos.1, self.msg
+        )?;
+        Ok(())
+    }
+}
+
+impl Error for ParseError {}
