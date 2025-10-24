@@ -90,6 +90,7 @@ impl<'a, W: Write> ErrorListener<'a> for CustomErrorListener<W> {
 fn parse_input(
     input_name: &str,
     is_filename: bool,
+    idx: i32,
     flags: &Flags,
 ) -> usize {
     let parse_errors = Rc::new(RefCell::new(Vec::<ParseError>::new()));
@@ -114,48 +115,32 @@ fn parse_input(
 	});
     parser.add_error_listener(pel);
 
-
-// To do:
-//    let mut lexer_listener = CustomErrorListener::new(flags.quiet, flags.tee, tee_writer);
-//    let mut parser_listener = CustomErrorListener::new(flags.quiet, flags.tee, tee_writer);
-//    lexer.add_error_listener(&mut lexer_listener);
-//    parser.add_error_listener(&mut parser_listener);
-
     let mut tee_file = flags.tee.then(|| File::create(format!("{}.errors", input_name)).unwrap());
     let tee_writer: &mut dyn Write = tee_file.as_mut().map(|f| f as _).unwrap_or(&mut io::sink());
 
     let start = Instant::now();
-    let tree = parser.rule_().expect("parsing failed setup");
+    let tree = parser.rulelist().expect("parsing failed setup");
     let elapsed = start.elapsed();
 
     let error_cnt = *lec.borrow() + *pec.borrow();
 
-    eprintln!("{}", error_cnt);
-
-	let tree_str = tree.to_string_tree(&*parser);
-	eprintln!("{}", tree_str);
-//	let tree_str = tree.to_string_tree(parser);
-//	let tree_str = antlr4rust::trees::string_tree(&tree, parser.get_rule_names());
-//        let tree_str = tree.to_string_tree(&parser);
-
-/*
     if flags.show_tree {
-        let tree_str = tree.to_string_tree(&parser);
+	let tree_str = tree.to_string_tree(&*parser);
         if flags.tee {
             let mut f = File::create(format!("{}.tree", input_name)).unwrap();
             writeln!(f, "{}", tree_str).ok();
         } else {
-//            eprintln!("{}", tree_str);
+	    eprintln!("{}", tree_str);
         }
     }
+
     if !flags.quiet {
-        eprint!("{}Go {} {} {} {:.3}\n",
+        eprint!("{}Rust {} {} {} {:.3}\n",
             flags.prefix, idx, input_name,
             if error_cnt > 0 { "fail" } else { "success" },
             elapsed.as_secs_f64()
         );
     }
-*/
 
     if error_cnt > 0 { 1 } else { 0 }
 }
@@ -224,7 +209,7 @@ fn main() {
         for (idx, input) in flags.inputs.iter().enumerate() {
             let is_fn = flags.is_fns[idx];
 	    let start_all = Instant::now();
-	    parse_input(input, true, &flags);
+	    parse_input(input, true, idx as i32, &flags);
 	    let elapsed = start_all.elapsed();
 	    if !flags.quiet {
 		eprintln!("{}Total Time: {:.3}", flags.prefix, elapsed.as_secs_f64());
